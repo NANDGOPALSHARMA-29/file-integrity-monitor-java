@@ -1,4 +1,4 @@
-# File Integrity Monitor (Java)
+# Real Time File Integrity Monitor (Java)
 
 A real-time File Integrity Monitoring (FIM) system built in Java that detects unauthorized file changes using cryptographic hashing and OS-level file system events.
 
