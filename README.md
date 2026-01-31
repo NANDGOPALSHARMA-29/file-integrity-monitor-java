@@ -30,7 +30,6 @@ java FIM
 ```
 
 ## Usage
-
 1. Enter the folder path to monitor  
 2. Select option `1` to create a baseline  
 3. Restart the program  
@@ -38,13 +37,11 @@ java FIM
 5. Create, modify, or delete files in the monitored folder to see alerts  
 
 ## Limitations
-
 - Subdirectory monitoring is non-recursive  
 - Runs as a foreground process  
 - Email alerts are not enabled in the current version  
 
 ## Future Enhancements
-
 - Recursive directory monitoring  
 - Email alert integration  
 - Background service support  
