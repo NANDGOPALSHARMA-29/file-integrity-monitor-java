@@ -1,13 +1,15 @@
 import java.io.*;
+import java.nio.file.*;
 import java.security.MessageDigest;
 import java.util.*;
 
 public class FIM {
 
-    static String BASELINE_FILE = "baseline.txt";
     static String rootPath;
 
-    public static void main(String[] args) throws Exception {
+    // ───────────────── MAIN ─────────────────
+
+    public static void main(String[] args) {
 
         Scanner sc = new Scanner(System.in);
 
@@ -20,64 +22,103 @@ public class FIM {
             return;
         }
 
-        rootPath = folder.getCanonicalPath();
+        try {
+            rootPath = folder.getCanonicalPath();
+        } catch (IOException e) {
+            System.err.println("Failed to resolve folder path.");
+            return;
+        }
 
         System.out.println("\n1. Create Baseline");
         System.out.println("2. Check Integrity");
         System.out.println("3. Start Real-Time Monitoring");
+        System.out.println("4. Update Baseline");
         System.out.print("Choose option: ");
 
-        int choice = sc.nextInt();
-
-        if (choice == 1) {
-            createBaseline(folder);
-            System.out.println("\n[+] Baseline created successfully.");
-        }
-        else if (choice == 2) {
-            checkIntegrity(folder);
-        }
-        else if (choice == 3) {
-            Monitor.start(folder.toPath(), rootPath);
-        }
-        else {
+        int choice;
+        try {
+            choice = Integer.parseInt(sc.nextLine());
+        } catch (Exception e) {
             System.out.println("Invalid choice!");
+            return;
+        }
+
+        try {
+            switch (choice) {
+                case 1 -> {
+                    createBaseline(folder);
+                    System.out.println("\n[+] Baseline created successfully.");
+                }
+                case 2 -> checkIntegrity(folder);
+                case 3 -> Monitor.start(folder.toPath());
+                case 4 -> {
+                    createBaseline(folder);
+                    System.out.println("\n[+] Baseline updated successfully.");
+                }
+                default -> System.out.println("Invalid choice!");
+            }
+        } catch (Exception e) {
+            System.err.println("Error: " + e.getMessage());
         }
     }
 
-    // ---------------- BASELINE ----------------
+    // ───────────────── BASELINE FILE (SECURE LOCATION) ─────────────────
+
+    static File getBaselineFile() {
+
+        File dir = new File(System.getProperty("user.home"), ".fim");
+        if (!dir.exists()) dir.mkdirs();
+
+        return new File(dir, "baseline.db");
+    }
+
+    // ───────────────── BASELINE CREATION ─────────────────
+
     static void createBaseline(File folder) throws Exception {
-        Map<String, String> fileHashes = new HashMap<>();
-        scanFolder(folder, fileHashes);
 
-        BufferedWriter bw = new BufferedWriter(new FileWriter(BASELINE_FILE));
-        for (String path : fileHashes.keySet()) {
-            bw.write(path + "|" + fileHashes.get(path));
-            bw.newLine();
+        Map<String, FileMeta> map = new HashMap<>();
+        scanFolder(folder, map);
+
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(getBaselineFile()))) {
+            for (Map.Entry<String, FileMeta> e : map.entrySet()) {
+                FileMeta m = e.getValue();
+                bw.write(e.getKey() + "|" + m.size + "|" + m.lastModified + "|" + m.hash);
+                bw.newLine();
+            }
         }
-        bw.close();
     }
 
-    // ---------------- CHECK ----------------
-    static void checkIntegrity(File folder) throws Exception {
-        Map<String, String> oldHashes = loadBaseline();
-        Map<String, String> newHashes = new HashMap<>();
+    // ───────────────── INTEGRITY CHECK ─────────────────
 
-        scanFolder(folder, newHashes);
+    static void checkIntegrity(File folder) throws Exception {
+
+        Map<String, FileMeta> oldData = loadBaseline();
+        Map<String, FileMeta> newData = new HashMap<>();
+
+        scanFolder(folder, newData);
 
         boolean changesFound = false;
 
-        for (String path : oldHashes.keySet()) {
-            if (!newHashes.containsKey(path)) {
+        for (String path : oldData.keySet()) {
+            if (!newData.containsKey(path)) {
                 System.out.println("[DELETED] " + path);
                 changesFound = true;
-            } else if (!oldHashes.get(path).equals(newHashes.get(path))) {
-                System.out.println("[MODIFIED] " + path);
-                changesFound = true;
+            } else {
+                FileMeta o = oldData.get(path);
+                FileMeta n = newData.get(path);
+
+                if (o.size != n.size ||
+                        o.lastModified != n.lastModified ||
+                        !o.hash.equals(n.hash)) {
+
+                    System.out.println("[MODIFIED] " + path);
+                    changesFound = true;
+                }
             }
         }
 
-        for (String path : newHashes.keySet()) {
-            if (!oldHashes.containsKey(path)) {
+        for (String path : newData.keySet()) {
+            if (!oldData.containsKey(path)) {
                 System.out.println("[NEW FILE] " + path);
                 changesFound = true;
             }
@@ -90,55 +131,137 @@ public class FIM {
         System.out.println("\nIntegrity check completed.");
     }
 
-    // ---------------- UTILS ----------------
-    static void scanFolder(File folder, Map<String, String> map) throws Exception {
-        for (File file : folder.listFiles()) {
+    // ───────────────── SCAN ─────────────────
+
+    static void scanFolder(File folder, Map<String, FileMeta> map) throws Exception {
+
+        File[] files = folder.listFiles();
+        if (files == null) return;
+
+        Path root = Paths.get(rootPath);
+
+        for (File file : files) {
+
+            if (Files.isSymbolicLink(file.toPath())) continue;
+
             if (file.isDirectory()) {
                 scanFolder(file, map);
-            } else {
-                String fullPath = file.getCanonicalPath();
-                String relativePath = fullPath.substring(rootPath.length());
-                map.put(relativePath, getFileHash(file));
+                continue;
             }
+
+            Path filePath;
+            try {
+                filePath = file.getCanonicalFile().toPath();
+            } catch (IOException e) {
+                continue;
+            }
+
+            if (!filePath.startsWith(root)) continue;
+
+            String relativePath = root.relativize(filePath)
+                    .toString()
+                    .replace(File.separatorChar, '/');
+
+            long size = file.length();
+            long lastModified = file.lastModified();
+
+            FileMeta old = map.get(relativePath);
+            if (old != null &&
+                    old.size == size &&
+                    old.lastModified == lastModified) {
+                continue;
+            }
+
+            String hash;
+            try {
+                hash = getFileHash(file);
+            } catch (Exception e) {
+                continue;
+            }
+
+            map.put(relativePath, new FileMeta(size, lastModified, hash));
         }
     }
 
-    public static String getFileHash(File file) throws Exception {
+    // ───────────────── HASH ─────────────────
+
+    static String getFileHash(File file) throws Exception {
+
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        FileInputStream fis = new FileInputStream(file);
 
-        byte[] buffer = new byte[1024];
-        int bytesRead;
-        while ((bytesRead = fis.read(buffer)) != -1) {
-            digest.update(buffer, 0, bytesRead);
+        try (FileInputStream fis = new FileInputStream(file)) {
+            byte[] buffer = new byte[4096];
+            int n;
+            while ((n = fis.read(buffer)) != -1) {
+                digest.update(buffer, 0, n);
+            }
         }
-        fis.close();
 
-        byte[] hashBytes = digest.digest();
+        byte[] hash = digest.digest();
         StringBuilder sb = new StringBuilder();
-        for (byte b : hashBytes) {
-            sb.append(String.format("%02x", b));
-        }
+        for (byte b : hash) sb.append(String.format("%02x", b));
         return sb.toString();
     }
 
-    public static Map<String, String> loadBaseline() throws Exception {
-        Map<String, String> map = new HashMap<>();
-        File file = new File(BASELINE_FILE);
+    // ───────────────── LOAD BASELINE ─────────────────
 
-        if (!file.exists()) {
-            System.out.println("Baseline not found! Create baseline first.");
-            System.exit(0);
+    static Map<String, FileMeta> loadBaseline() throws Exception {
+
+        File baseline = getBaselineFile();
+        if (!baseline.exists()) {
+            throw new FileNotFoundException("Baseline not found. Create baseline first.");
         }
 
-        BufferedReader br = new BufferedReader(new FileReader(file));
-        String line;
-        while ((line = br.readLine()) != null) {
-            String[] parts = line.split("\\|");
-            map.put(parts[0], parts[1]);
-        }
-        br.close();
+        Map<String, FileMeta> map = new HashMap<>();
 
+        try (BufferedReader br = new BufferedReader(new FileReader(baseline))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+
+                String[] p = line.split("\\|");
+                if (p.length != 4) continue;
+
+                try {
+                    map.put(p[0],
+                            new FileMeta(
+                                    Long.parseLong(p[1]),
+                                    Long.parseLong(p[2]),
+                                    p[3]
+                            ));
+                } catch (Exception ignored) {}
+            }
+        }
         return map;
     }
+
+    // ───────────────── MONITOR COMPATIBILITY ─────────────────
+
+    public static Map<String, String> loadBaselineForMonitor() throws Exception {
+
+        Map<String, FileMeta> metaMap = loadBaseline();
+        Map<String, String> simpleMap = new HashMap<>();
+
+        for (Map.Entry<String, FileMeta> e : metaMap.entrySet()) {
+            simpleMap.put(e.getKey(), e.getValue().hash);
+        }
+        return simpleMap;
+    }
+
+    // ───────────────── META CLASS ─────────────────
+
+    static class FileMeta {
+        long size;
+        long lastModified;
+        String hash;
+
+        FileMeta(long s, long lm, String h) {
+            size = s;
+            lastModified = lm;
+            hash = h;
+        }
+    }
 }
+
+
+
+

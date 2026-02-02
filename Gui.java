@@ -12,8 +12,12 @@ public class Gui {
         start.addActionListener(e -> {
             new Thread(() -> {
                 try {
+                    // 🔧 Folder to monitor
                     Path p = Paths.get("C:\\monitor");
-                    Monitor.start(p, p.toFile().getCanonicalPath());
+
+                    // ✅ FIXED: correct Monitor API
+                    Monitor.start(p);
+
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }
