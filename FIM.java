@@ -6,6 +6,8 @@ import java.util.*;
 public class FIM {
 
     static String rootPath;
+    static final String DIR_HASH = "DIR";
+    static final String UNREADABLE_HASH = "UNREADABLE";
 
     // ───────────────── MAIN ─────────────────
 
@@ -50,7 +52,14 @@ public class FIM {
                     System.out.println("\n[+] Baseline created successfully.");
                 }
                 case 2 -> checkIntegrity(folder);
-                case 3 -> Monitor.start(folder.toPath());
+                case 3 -> {
+                    if (!getBaselineFile().exists()) {
+                        System.out.println("[!] Baseline not found. Creating baseline first...");
+                        createBaseline(folder);
+                        System.out.println("[+] Baseline created successfully.");
+                    }
+                    Monitor.start(folder.toPath());
+                }
                 case 4 -> {
                     createBaseline(folder);
                     System.out.println("\n[+] Baseline updated successfully.");
@@ -101,11 +110,36 @@ public class FIM {
 
         for (String path : oldData.keySet()) {
             if (!newData.containsKey(path)) {
-                System.out.println("[DELETED] " + path);
+                FileMeta o = oldData.get(path);
+                if (DIR_HASH.equals(o.hash)) {
+                    System.out.println("[DELETED FOLDER] " + path);
+                } else {
+                    System.out.println("[DELETED FILE] " + path);
+                }
                 changesFound = true;
             } else {
                 FileMeta o = oldData.get(path);
                 FileMeta n = newData.get(path);
+
+                if (DIR_HASH.equals(o.hash)) {
+                    if (!DIR_HASH.equals(n.hash)) {
+                        System.out.println("[TYPE CHANGED] " + path);
+                        changesFound = true;
+                    }
+                    continue;
+                }
+
+                if (DIR_HASH.equals(n.hash)) {
+                    System.out.println("[TYPE CHANGED] " + path);
+                    changesFound = true;
+                    continue;
+                }
+
+                if (UNREADABLE_HASH.equals(n.hash)) {
+                    System.out.println("[SKIPPED] " + path + " (unreadable)");
+                    changesFound = true;
+                    continue;
+                }
 
                 if (o.size != n.size ||
                         o.lastModified != n.lastModified ||
@@ -119,7 +153,12 @@ public class FIM {
 
         for (String path : newData.keySet()) {
             if (!oldData.containsKey(path)) {
-                System.out.println("[NEW FILE] " + path);
+                FileMeta n = newData.get(path);
+                if (DIR_HASH.equals(n.hash)) {
+                    System.out.println("[NEW FOLDER] " + path);
+                } else {
+                    System.out.println("[NEW FILE] " + path);
+                }
                 changesFound = true;
             }
         }
@@ -144,11 +183,6 @@ public class FIM {
 
             if (Files.isSymbolicLink(file.toPath())) continue;
 
-            if (file.isDirectory()) {
-                scanFolder(file, map);
-                continue;
-            }
-
             Path filePath;
             try {
                 filePath = file.getCanonicalFile().toPath();
@@ -161,6 +195,14 @@ public class FIM {
             String relativePath = root.relativize(filePath)
                     .toString()
                     .replace(File.separatorChar, '/');
+
+            if (file.isDirectory()) {
+                if (!relativePath.isEmpty()) {
+                    map.put(relativePath, new FileMeta(0, 0, DIR_HASH));
+                }
+                scanFolder(file, map);
+                continue;
+            }
 
             long size = file.length();
             long lastModified = file.lastModified();
@@ -176,7 +218,7 @@ public class FIM {
             try {
                 hash = getFileHash(file);
             } catch (Exception e) {
-                continue;
+                hash = UNREADABLE_HASH;
             }
 
             map.put(relativePath, new FileMeta(size, lastModified, hash));
@@ -261,7 +303,4 @@ public class FIM {
         }
     }
 }
-
-
-
 
