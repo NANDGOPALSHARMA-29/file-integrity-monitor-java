@@ -58,7 +58,10 @@ public class FIM {
                         createBaseline(folder);
                         System.out.println("[+] Baseline created successfully.");
                     }
+                    EmailNotifier notifier = EmailNotifier.startDefault();
+                    Runtime.getRuntime().addShutdownHook(new Thread(notifier::stop));
                     Monitor.start(folder.toPath());
+                    notifier.stop();
                 }
                 case 4 -> {
                     createBaseline(folder);

@@ -19,7 +19,7 @@ This project evolved from a baseline-only checker into a **rename-aware, real-ti
 
 ---
 
-## How It Works (FIM.java + Monitor.java)
+## How It Works (FIM.java + Monitor.java + EmailNotifier.java)
 
 ### FIM.java (CLI controller)
 
@@ -37,6 +37,7 @@ This project evolved from a baseline-only checker into a **rename-aware, real-ti
      - `[NEW]`, `[MODIFIED]`, `[DELETED]`, `[TYPE CHANGED]`.
 5. Real-time monitoring:
    - Ensures baseline exists, then calls `Monitor.start(...)`.
+   - Starts `EmailNotifier` (SMTP if configured, console fallback otherwise).
 
 ### Monitor.java (real-time engine)
 
@@ -121,13 +122,14 @@ FIM.java (menu + control)
 - File I/O
 - Concurrent collections (ConcurrentHashMap)
 - OS-level filesystem events
+- Jakarta Mail + Activation (SMTP email notifications + attachments)
 
 ---
 
 ## How to Run
 ```bash
-javac *.java
-java FIM
+javac -cp "lib/*" *.java
+java -cp ".;lib/*" FIM
 ```
 
 ## Usage
@@ -137,14 +139,34 @@ java FIM
 3. Restart the program
 4. Choose Start Real-Time Monitoring
 5. Create, modify, or delete files in the monitored folder to see alerts
-6. Observe real-time integrity events in the console
+6. Observe real-time integrity events in the console (and email if configured)
+
+---
+
+## Email Configuration (Optional)
+
+Email sending is enabled when SMTP environment variables are set. If `FIM_SMTP_HOST` is empty, emails are printed to the console instead.
+
+Required for SMTP:
+- `FIM_SMTP_HOST`
+- `FIM_MAIL_TO` (comma-separated)
+
+Common optional settings:
+- `FIM_SMTP_PORT` (default: `25`)
+- `FIM_SMTP_STARTTLS` (default: `false`)
+- `FIM_SMTP_USER`
+- `FIM_SMTP_PASS`
+- `FIM_MAIL_FROM` (default: `fim@localhost`)
+- `FIM_MAIL_SUBJECT` (default: `[FIM]`)
+- `FIM_BATCH_SEC` (default: `45`)
+- `FIM_ATTACH_MAX_BYTES` (default: `524288`)
 
 ---
 
 ## Limitations
 
 - Runs as a foreground process
-- Email alerts are not enabled in the current version
+- Email alerts require SMTP configuration (see above)
 - No persistent event logging yet
 
 ---
