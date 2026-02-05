@@ -11,6 +11,7 @@ public final class GuiController {
         void setMonitoringState(boolean running);
         void setMonitorStatus(String text);
         void setEmailStatus(String text);
+        void addEvent(AlertEvent event);
     }
 
     private final View view;
@@ -35,6 +36,9 @@ public final class GuiController {
         emailService.start();
         view.setMonitorStatus("Monitor: Stopped");
         view.setEmailStatus("Email: " + (emailDesiredEnabled ? "Enabled" : "Disabled"));
+
+        // Subscribe to live events
+        AlertBus.register(event -> view.addEvent(event));
     }
 
     public void shutdown() {

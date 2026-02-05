@@ -7,12 +7,24 @@ import java.util.concurrent.TimeUnit;
 public final class AlertBus {
 
     private static final BlockingQueue<AlertEvent> QUEUE = new LinkedBlockingQueue<>();
+    private static final List<java.util.function.Consumer<AlertEvent>> listeners = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     private AlertBus() {}
+
+    public static void register(java.util.function.Consumer<AlertEvent> listener) {
+        listeners.add(listener);
+    }
 
     public static void publish(AlertEvent event) {
         if (event != null) {
             QUEUE.offer(event);
+            for (java.util.function.Consumer<AlertEvent> listener : listeners) {
+                try {
+                    listener.accept(event);
+                } catch (Exception e) {
+                    // Ignore listener errors
+                }
+            }
         }
     }
 

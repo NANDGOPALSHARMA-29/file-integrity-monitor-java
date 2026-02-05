@@ -1,7 +1,6 @@
 import javax.swing.*;
-import java.awt.BorderLayout;
-import java.awt.Dimension;
-import java.awt.EventQueue;
+import javax.swing.table.DefaultTableCellRenderer;
+import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
@@ -11,6 +10,7 @@ public class Gui {
     private static final String DEFAULT_PATH = System.getProperty("user.home");
 
     public static void main(String[] args) {
+        Theme.applyDarkTheme();
         EventQueue.invokeLater(Gui::buildUi);
     }
 
@@ -19,47 +19,114 @@ public class Gui {
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         JTextField pathField = new JTextField(DEFAULT_PATH);
-        pathField.setPreferredSize(new Dimension(260, 28));
+        pathField.setPreferredSize(new Dimension(300, 35));
 
-        JButton browse = new JButton("Browse");
-        JButton createBaseline = new JButton("Create Baseline");
-        JButton checkIntegrity = new JButton("Check Integrity");
-        JButton startMonitoring = new JButton("Start Monitoring");
-        JButton stopMonitoring = new JButton("Stop Monitoring");
+        // Use ModernButton for all actions
+        ModernButton browse = new ModernButton("Browse");
+        ModernButton createBaseline = new ModernButton("Create Baseline");
+        ModernButton checkIntegrity = new ModernButton("Check Integrity");
+        ModernButton startMonitoring = new ModernButton("Start Monitoring");
+        ModernButton stopMonitoring = new ModernButton("Stop Monitoring");
         stopMonitoring.setEnabled(false);
 
         JCheckBox emailEnabled = new JCheckBox("Email Enabled");
         JTextField batchSec = new JTextField(5);
         JTextField attachMax = new JTextField(8);
 
-        JTextArea log = new JTextArea(10, 40);
-        log.setEditable(false);
-        JScrollPane scroll = new JScrollPane(log);
+        // Table Setup
+        EventTableModel model = new EventTableModel();
+        JTable table = new JTable(model);
+        table.setFillsViewportHeight(true);
+        table.setShowGrid(false);
+        table.setIntercellSpacing(new Dimension(0, 0));
+        table.setRowHeight(30);
+        table.getTableHeader().setPreferredSize(new Dimension(0, 35));
 
-        JPanel top = new JPanel();
-        top.add(new JLabel("Folder:"));
+        // Custom Renderer (Color Coding)
+        table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(
+                    JTable table, Object value, boolean isSelected,
+                    boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                AlertEvent event = model.getEventAt(row);
+
+                if (isSelected) {
+                    c.setBackground(table.getSelectionBackground());
+                    c.setForeground(table.getSelectionForeground());
+                } else {
+                    c.setForeground(Theme.FG_TEXT); // Default Text Color
+                    if (event != null) {
+                        switch (event.type) {
+                            case DELETED_FILE, DELETED_FOLDER -> {
+                                c.setBackground(Theme.COLOR_DELETED);
+                                c.setForeground(Color.WHITE); // White text on dark red
+                            }
+                            case NEW_FILE, NEW_FOLDER -> {
+                                c.setBackground(Theme.COLOR_NEW);
+                                c.setForeground(Color.WHITE);
+                            }
+                            case MODIFIED -> {
+                                c.setBackground(Theme.COLOR_MODIFIED);
+                                c.setForeground(Color.WHITE);
+                            }
+                            case RESTORED -> {
+                                c.setBackground(Theme.COLOR_RESTORED);
+                                c.setForeground(Color.WHITE);
+                            }
+                            default -> c.setBackground(Theme.BG_DARK);
+                        }
+                    } else {
+                        c.setBackground(Theme.BG_DARK);
+                    }
+                }
+                return c;
+            }
+        });
+
+        JScrollPane scroll = new JScrollPane(table);
+        scroll.setPreferredSize(new Dimension(800, 300)); // Adjusted height
+
+        // --- LAYOUT ---
+
+        // Top Bar
+        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 15));
+        top.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        top.add(new JLabel("Folder to Monitor:"));
         top.add(pathField);
         top.add(browse);
 
-        JPanel actions = new JPanel();
+        // Action Buttons Bar
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 15));
+        actions.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
         actions.add(createBaseline);
         actions.add(checkIntegrity);
         actions.add(startMonitoring);
         actions.add(stopMonitoring);
 
-        JPanel emailPanel = new JPanel();
+        // Email Settings Bar
+        JPanel emailPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 10));
+        emailPanel.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(Theme.BORDER), "Email Settings",
+                0, 0, Theme.FONT_MAIN, Theme.FG_BRIGHT));
         emailPanel.add(emailEnabled);
         emailPanel.add(new JLabel("Batch (sec):"));
         emailPanel.add(batchSec);
         emailPanel.add(new JLabel("Attach max (bytes):"));
         emailPanel.add(attachMax);
 
+        // Combine Actions and Email
         JPanel center = new JPanel();
         center.setLayout(new BoxLayout(center, BoxLayout.Y_AXIS));
+        center.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20)); // Breathing room
         center.add(actions);
+        center.add(Box.createVerticalStrut(10));
         center.add(emailPanel);
+        center.add(Box.createVerticalStrut(10));
 
         JLabel status = new JLabel("Monitor: Stopped | Email: Disabled");
+        status.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
+        status.setFont(Theme.FONT_MAIN_BOLD);
 
         frame.add(top, BorderLayout.NORTH);
         frame.add(center, BorderLayout.CENTER);
@@ -76,8 +143,7 @@ public class Gui {
                         frame,
                         message,
                         "FIM",
-                        JOptionPane.ERROR_MESSAGE
-                ));
+                        JOptionPane.ERROR_MESSAGE));
             }
 
             @Override
@@ -86,8 +152,7 @@ public class Gui {
                         frame,
                         message,
                         "FIM",
-                        JOptionPane.INFORMATION_MESSAGE
-                ));
+                        JOptionPane.INFORMATION_MESSAGE));
             }
 
             @Override
@@ -123,12 +188,15 @@ public class Gui {
             public void setEmailStatus(String text) {
                 runOnEdt(() -> updateStatus(status, null, text));
             }
+
+            @Override
+            public void addEvent(AlertEvent event) {
+                runOnEdt(() -> model.addEvent(event));
+            }
         });
 
-        AppLog.setSink((level, message) -> runOnEdt(() -> {
-            log.append(message + System.lineSeparator());
-            log.setCaretPosition(log.getDocument().getLength());
-        }));
+        // AppLog.setSink removed effectively because we want Table to be the main view.
+        // But for console debugging we keep default System.out
         controller.startApp();
 
         GuiConfig defaults = GuiConfig.fromEnvDefaults();
@@ -182,8 +250,7 @@ public class Gui {
                 "Baseline not found for:\n" + folder.getAbsolutePath() + "\n\nCreate baseline now?",
                 "Create Baseline",
                 JOptionPane.YES_NO_OPTION,
-                JOptionPane.WARNING_MESSAGE
-        );
+                JOptionPane.WARNING_MESSAGE);
         return result == JOptionPane.YES_OPTION;
     }
 
@@ -191,8 +258,7 @@ public class Gui {
             GuiController controller,
             JTextField batchSec,
             JTextField attachMax,
-            JFrame frame
-    ) {
+            JFrame frame) {
         Long b = parseLong(batchSec.getText());
         Long a = parseLong(attachMax.getText());
         if (b == null || a == null || b <= 0 || a <= 0) {
@@ -200,8 +266,7 @@ public class Gui {
                     frame,
                     "Please enter valid positive numbers for email settings.",
                     "FIM",
-                    JOptionPane.ERROR_MESSAGE
-            );
+                    JOptionPane.ERROR_MESSAGE);
             return;
         }
         controller.updateEmailSettings(b, a);
@@ -220,8 +285,10 @@ public class Gui {
         String[] parts = text.split("\\|", -1);
         String monitorText = parts.length > 0 ? parts[0].trim() : "Monitor: Stopped";
         String emailText = parts.length > 1 ? parts[1].trim() : "Email: Disabled";
-        if (monitor != null) monitorText = monitor;
-        if (email != null) emailText = email;
+        if (monitor != null)
+            monitorText = monitor;
+        if (email != null)
+            emailText = email;
         label.setText(monitorText + " | " + emailText);
     }
 }
