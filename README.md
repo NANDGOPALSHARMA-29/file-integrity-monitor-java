@@ -1,9 +1,10 @@
-# REAL-TIME FILE INTEGRITY MONITOR
+﻿# REAL-TIME FILE INTEGRITY MONITOR
 
 A robust, real-time File Integrity Monitoring system engineered in Java. This tool detects unauthorized changes to the filesystem including file creation, modification, deletion, and renaming events using cryptographic verification and OS-level hooks.
 
-## � Table of Contents
+## Table of Contents
 - [Overview](#overview)
+- [Technical Specifications](#technical-specifications)
 - [Architecture](#architecture)
 - [Features](#features)
 - [Prerequisites](#prerequisites)
@@ -14,7 +15,7 @@ A robust, real-time File Integrity Monitoring system engineered in Java. This to
 ## Overview
 The FIM tool is designed to provide security visibility into filesystem activities. Unlike traditional polling-based monitors, this system leverages Java NIO's `WatchService` for event-driven detection, ensuring minimal CPU overhead while maintaining near-instantaneous alert generation. It validates file integrity using **SHA-256** hashing to distinguish between superficial timestamp changes and actual content modification.
 
-## ⚙️ Technical Specifications
+## Technical Specifications
 
 | Component | Specification |
 | :--- | :--- |
@@ -83,15 +84,26 @@ The application can be configured via Environment Variables for deployment flexi
 
 ## Project Structure
 ```text
-src/
-├── Monitor.java       # Core event loop and logic
-├── FIM.java           # CLI Entry point and Baseline management
-├── Gui.java           # Main GUI Entry point
-├── GuiController.java # Logic separating View and Model
-├── AlertBus.java      # Event pub/sub system
-├── AlertEvent.java    # Data carrier for events
-├── EmailNotifier.java # SMTP handling logic
-└── Theme.java         # UI Look and Feel definitions
+.
+|-- AlertBus.java
+|-- AlertEvent.java
+|-- AppLog.java
+|-- EmailNotifier.java
+|-- EmailService.java
+|-- EventTableModel.java
+|-- FIM.java
+|-- Gui.java
+|-- GuiConfig.java
+|-- GuiController.java
+|-- ModernButton.java
+|-- Monitor.java
+|-- MonitorSession.java
+|-- Theme.java
+|-- baseline.txt
+|-- README.md
+`-- lib/
+    |-- jakarta.activation-2.0.1.jar
+    `-- jakarta.mail-2.0.2.jar
 ```
 
 ## License
@@ -99,3 +111,5 @@ This project is open-source and available for educational and security auditing 
 
 ## Author
 **NAND GOPAL SHARMA**
+
+
