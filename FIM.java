@@ -1,4 +1,5 @@
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.security.MessageDigest;
 import java.util.*;
@@ -9,7 +10,7 @@ public class FIM {
     static final String DIR_HASH = "DIR";
     static final String UNREADABLE_HASH = "UNREADABLE";
 
-    // ───────────────── MAIN ─────────────────
+    // ---------- MAIN ----------
 
     public static void main(String[] args) {
 
@@ -20,28 +21,28 @@ public class FIM {
 
         File folder = new File(folderPath);
         if (!folder.exists() || !folder.isDirectory()) {
-            System.out.println("Invalid folder path!");
+            AppLog.error("Invalid folder path: " + folderPath);
             return;
         }
 
         try {
             rootPath = folder.getCanonicalPath();
         } catch (IOException e) {
-            System.err.println("Failed to resolve folder path.");
+            AppLog.error("Failed to resolve folder path.");
             return;
         }
 
-        System.out.println("\n1. Create Baseline");
-        System.out.println("2. Check Integrity");
-        System.out.println("3. Start Real-Time Monitoring");
-        System.out.println("4. Update Baseline");
+        AppLog.info("\n1. Create Baseline");
+        AppLog.info("2. Check Integrity");
+        AppLog.info("3. Start Real-Time Monitoring");
+        AppLog.info("4. Update Baseline");
         System.out.print("Choose option: ");
 
         int choice;
         try {
             choice = Integer.parseInt(sc.nextLine());
         } catch (Exception e) {
-            System.out.println("Invalid choice!");
+            AppLog.error("Invalid choice. Please enter 1-4.");
             return;
         }
 
@@ -49,14 +50,14 @@ public class FIM {
             switch (choice) {
                 case 1 -> {
                     createBaseline(folder);
-                    System.out.println("\n[+] Baseline created successfully.");
+                    AppLog.info("\n[+] Baseline created successfully.");
                 }
                 case 2 -> checkIntegrity(folder);
                 case 3 -> {
                     if (!getBaselineFile().exists()) {
-                        System.out.println("[!] Baseline not found. Creating baseline first...");
+                        AppLog.warn("[!] Baseline not found. Creating baseline first...");
                         createBaseline(folder);
-                        System.out.println("[+] Baseline created successfully.");
+                        AppLog.info("[+] Baseline created successfully.");
                     }
                     EmailNotifier notifier = EmailNotifier.startDefault();
                     Runtime.getRuntime().addShutdownHook(new Thread(notifier::stop));
@@ -65,26 +66,30 @@ public class FIM {
                 }
                 case 4 -> {
                     createBaseline(folder);
-                    System.out.println("\n[+] Baseline updated successfully.");
+                    AppLog.info("\n[+] Baseline updated successfully.");
                 }
-                default -> System.out.println("Invalid choice!");
+                default -> AppLog.error("Invalid choice. Please enter 1-4.");
             }
         } catch (Exception e) {
-            System.err.println("Error: " + e.getMessage());
+            AppLog.error("Operation failed: " + e.getMessage());
         }
     }
 
-    // ───────────────── BASELINE FILE (SECURE LOCATION) ─────────────────
+    // ---------- BASELINE FILE (SECURE LOCATION) ----------
 
     static File getBaselineFile() {
 
         File dir = new File(System.getProperty("user.home"), ".fim");
         if (!dir.exists()) dir.mkdirs();
 
-        return new File(dir, "baseline.db");
+        String name = "baseline.db";
+        if (rootPath != null && !rootPath.isBlank()) {
+            name = "baseline_" + hashString(rootPath) + ".db";
+        }
+        return new File(dir, name);
     }
 
-    // ───────────────── BASELINE CREATION ─────────────────
+    // ---------- BASELINE CREATION ----------
 
     static void createBaseline(File folder) throws Exception {
 
@@ -100,7 +105,7 @@ public class FIM {
         }
     }
 
-    // ───────────────── INTEGRITY CHECK ─────────────────
+    // ---------- INTEGRITY CHECK ----------
 
     static void checkIntegrity(File folder) throws Exception {
 
@@ -115,9 +120,9 @@ public class FIM {
             if (!newData.containsKey(path)) {
                 FileMeta o = oldData.get(path);
                 if (DIR_HASH.equals(o.hash)) {
-                    System.out.println("[DELETED FOLDER] " + path);
+                    AppLog.info("[DELETED FOLDER] " + path);
                 } else {
-                    System.out.println("[DELETED FILE] " + path);
+                    AppLog.info("[DELETED FILE] " + path);
                 }
                 changesFound = true;
             } else {
@@ -126,20 +131,20 @@ public class FIM {
 
                 if (DIR_HASH.equals(o.hash)) {
                     if (!DIR_HASH.equals(n.hash)) {
-                        System.out.println("[TYPE CHANGED] " + path);
+                        AppLog.info("[TYPE CHANGED] " + path);
                         changesFound = true;
                     }
                     continue;
                 }
 
                 if (DIR_HASH.equals(n.hash)) {
-                    System.out.println("[TYPE CHANGED] " + path);
+                    AppLog.info("[TYPE CHANGED] " + path);
                     changesFound = true;
                     continue;
                 }
 
                 if (UNREADABLE_HASH.equals(n.hash)) {
-                    System.out.println("[SKIPPED] " + path + " (unreadable)");
+                    AppLog.warn("[SKIPPED] " + path + " (unreadable)");
                     changesFound = true;
                     continue;
                 }
@@ -148,7 +153,7 @@ public class FIM {
                         o.lastModified != n.lastModified ||
                         !o.hash.equals(n.hash)) {
 
-                    System.out.println("[MODIFIED] " + path);
+                    AppLog.info("[MODIFIED] " + path);
                     changesFound = true;
                 }
             }
@@ -158,22 +163,22 @@ public class FIM {
             if (!oldData.containsKey(path)) {
                 FileMeta n = newData.get(path);
                 if (DIR_HASH.equals(n.hash)) {
-                    System.out.println("[NEW FOLDER] " + path);
+                    AppLog.info("[NEW FOLDER] " + path);
                 } else {
-                    System.out.println("[NEW FILE] " + path);
+                    AppLog.info("[NEW FILE] " + path);
                 }
                 changesFound = true;
             }
         }
 
         if (!changesFound) {
-            System.out.println("[OK] No changes detected.");
+            AppLog.info("[OK] No changes detected.");
         }
 
-        System.out.println("\nIntegrity check completed.");
+        AppLog.info("\nIntegrity check completed.");
     }
 
-    // ───────────────── SCAN ─────────────────
+    // ---------- SCAN ----------
 
     static void scanFolder(File folder, Map<String, FileMeta> map) throws Exception {
 
@@ -228,7 +233,7 @@ public class FIM {
         }
     }
 
-    // ───────────────── HASH ─────────────────
+    // ---------- HASH ----------
 
     static String getFileHash(File file) throws Exception {
 
@@ -248,7 +253,19 @@ public class FIM {
         return sb.toString();
     }
 
-    // ───────────────── LOAD BASELINE ─────────────────
+    private static String hashString(String input) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : bytes) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
+
+    // ---------- LOAD BASELINE ----------
 
     static Map<String, FileMeta> loadBaseline() throws Exception {
 
@@ -279,7 +296,7 @@ public class FIM {
         return map;
     }
 
-    // ───────────────── MONITOR COMPATIBILITY ─────────────────
+    // ---------- MONITOR COMPATIBILITY ----------
 
     public static Map<String, String> loadBaselineForMonitor() throws Exception {
 
@@ -292,7 +309,7 @@ public class FIM {
         return simpleMap;
     }
 
-    // ───────────────── META CLASS ─────────────────
+    // ---------- META CLASS ----------
 
     static class FileMeta {
         long size;

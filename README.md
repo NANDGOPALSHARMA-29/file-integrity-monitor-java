@@ -1,6 +1,6 @@
 # Real-Time File Integrity Monitor (Java)
 
-A **real-time, event-driven File Integrity Monitoring (FIM)** system built in Java that tracks filesystem changes using **OS-level events**, **cryptographic hashing**, and a **runtime state map**.
+A **real-time, event-driven File Integrity Monitoring (FIM)** system built in Java that tracks filesystem changes using **OS-level events**, **cryptographic hashing**, and a **runtime state map**. Includes both a **CLI** and a **Swing GUI**.
 
 This project evolved from a baseline-only checker into a **rename-aware, real-time FIM**.
 
@@ -16,10 +16,11 @@ This project evolved from a baseline-only checker into a **rename-aware, real-ti
 - Debounce handling for ENTRY_MODIFY event spam
 - Runtime state as ground truth (baseline != live filesystem)
 - Cross-platform (Windows / Linux / macOS)
+- Swing GUI for quick monitoring and email controls
 
 ---
 
-## How It Works (FIM.java + Monitor.java + EmailNotifier.java)
+## How It Works (FIM.java + Monitor.java + EmailNotifier.java + Gui.java)
 
 ### FIM.java (CLI controller)
 
@@ -31,7 +32,7 @@ This project evolved from a baseline-only checker into a **rename-aware, real-ti
    - Update Baseline
 3. Baseline creation:
    - Recursively scans files/folders.
-   - Saves `{relativePath | size | lastModified | hash}` to `~/.fim/baseline.db`.
+   - Saves `{relativePath | size | lastModified | hash}` to `~/.fim/baseline_<hash>.db` (hash is derived from the root path).
 4. Integrity check:
    - Loads baseline, rescans folder, compares:
      - `[NEW]`, `[MODIFIED]`, `[DELETED]`, `[TYPE CHANGED]`.
@@ -115,6 +116,15 @@ FIM.java (menu + control)
 ```
 ---
 
+## GUI (Gui.java + GuiController.java)
+
+- Folder picker + buttons for baseline, integrity check, and monitoring
+- Status bar shows monitor + email state
+- Email controls let you toggle sending and adjust batch/attachment limits
+- Email sending is active only while monitoring is running
+
+---
+
 ## Technologies Used
 - Java
 - Java NIO (WatchService, Path, Files)
@@ -131,6 +141,35 @@ FIM.java (menu + control)
 javac -cp "lib/*" *.java
 java -cp ".;lib/*" FIM
 ```
+
+GUI:
+```bash
+javac -cp "lib/*" *.java
+java -cp ".;lib/*" Gui
+```
+
+Note: On macOS/Linux, replace the classpath separator `;` with `:`.
+
+---
+
+## Workflow (Step-by-Step)
+
+### CLI
+1. Compile and run `FIM`.
+2. Enter the folder path to monitor.
+3. Choose an option:
+   - Create Baseline (one-time reference snapshot)
+   - Check Integrity (compare current disk vs baseline)
+   - Start Monitoring (real-time watch + alerts)
+   - Update Baseline (overwrite existing baseline)
+4. If monitoring starts and SMTP is configured, email alerts are sent in batches.
+
+### GUI
+1. Compile and run `Gui`.
+2. Choose a folder (Browse).
+3. Create Baseline (if not already created).
+4. Start Monitoring (real-time watch + alerts).
+5. Optionally toggle Email Enabled and adjust batch/attachment settings.
 
 ## Usage
 

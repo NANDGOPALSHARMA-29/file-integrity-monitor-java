@@ -25,27 +25,37 @@ import jakarta.mail.internet.MimeMultipart;
 
 public class EmailNotifier implements Runnable {
 
+    public interface ConfigProvider {
+        ConfigSnapshot get();
+    }
+
+    public interface ErrorListener {
+        void onError(String message);
+    }
+
     private static final DateTimeFormatter TIME_FMT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
                     .withLocale(Locale.US)
                     .withZone(ZoneId.systemDefault());
 
-    private final Config config;
-    private final EmailSender sender;
+    private final ConfigProvider configProvider;
+    private final ErrorListener errorListener;
     private final Thread thread;
     private volatile boolean running = true;
 
-    public EmailNotifier(Config config) {
-        this.config = config;
-        this.sender = config.smtpHost.isEmpty()
-                ? new ConsoleEmailSender()
-                : new SmtpEmailSender(config);
+    public EmailNotifier(ConfigProvider configProvider, ErrorListener errorListener) {
+        this.configProvider = configProvider;
+        this.errorListener = errorListener;
         this.thread = new Thread(this, "email-notifier");
         this.thread.setDaemon(true);
     }
 
     public static EmailNotifier startDefault() {
-        EmailNotifier notifier = new EmailNotifier(Config.fromEnv());
+        Config cfg = Config.fromEnv();
+        EmailNotifier notifier = new EmailNotifier(
+                () -> new ConfigSnapshot(cfg, true, 0),
+                null
+        );
         notifier.start();
         return notifier;
     }
@@ -67,7 +77,8 @@ public class EmailNotifier implements Runnable {
                 List<AlertEvent> batch = new ArrayList<>();
                 batch.add(first);
 
-                long deadline = System.currentTimeMillis() + config.batchWindowMs;
+                ConfigSnapshot snap = configProvider.get();
+                long deadline = System.currentTimeMillis() + snap.config.batchWindowMs;
                 while (true) {
                     long remaining = deadline - System.currentTimeMillis();
                     if (remaining <= 0) break;
@@ -76,18 +87,27 @@ public class EmailNotifier implements Runnable {
                     batch.add(next);
                 }
 
-                sendBatch(batch);
+                sendBatch(batch, snap.generation);
             } catch (InterruptedException e) {
                 if (!running) return;
             } catch (Exception e) {
-                System.err.println("[EmailNotifier] Error: " + e.getMessage());
+                AppLog.error("[EmailNotifier] Error: " + e.getMessage());
+                if (errorListener != null) {
+                    errorListener.onError("Email error: " + e.getMessage());
+                }
             }
         }
     }
 
-    private void sendBatch(List<AlertEvent> batch) {
+    private void sendBatch(List<AlertEvent> batch, long batchGeneration) {
         if (batch.isEmpty()) return;
 
+        ConfigSnapshot snap = configProvider.get();
+        if (!snap.enabled || snap.generation != batchGeneration) {
+            return;
+        }
+
+        Config config = snap.config;
         String subject = config.subjectPrefix + " " + batch.size() + " change(s)";
         StringBuilder body = new StringBuilder();
         body.append("FIM consolidated alerts\n\n");
@@ -113,6 +133,9 @@ public class EmailNotifier implements Runnable {
             attachments.add(new Attachment(f.getName(), f));
         }
 
+        EmailSender sender = config.smtpHost.isEmpty()
+                ? new ConsoleEmailSender()
+                : new SmtpEmailSender(config, errorListener);
         sender.send(
                 config.from,
                 config.toList,
@@ -198,6 +221,42 @@ public class EmailNotifier implements Runnable {
             );
         }
 
+        public static Config fromEnvWithOverrides(
+                Boolean enableEmail,
+                Long batchSec,
+                Long attachMaxBytes
+        ) {
+            Config base = fromEnv();
+
+            String host = base.smtpHost;
+            if (enableEmail != null && !enableEmail.booleanValue()) {
+                host = "";
+            }
+
+            long batchMs = base.batchWindowMs;
+            if (batchSec != null) {
+                batchMs = TimeUnit.SECONDS.toMillis(batchSec.longValue());
+            }
+
+            long attachMax = base.attachMaxBytes;
+            if (attachMaxBytes != null) {
+                attachMax = attachMaxBytes.longValue();
+            }
+
+            return new Config(
+                    host,
+                    base.smtpPort,
+                    base.startTls,
+                    base.username,
+                    base.password,
+                    base.from,
+                    base.toList,
+                    base.subjectPrefix,
+                    batchMs,
+                    attachMax
+            );
+        }
+
         private static String env(String key, String def) {
             String v = System.getenv(key);
             return v == null ? def : v;
@@ -226,22 +285,24 @@ public class EmailNotifier implements Runnable {
     private static final class ConsoleEmailSender implements EmailSender {
         @Override
         public void send(String from, List<String> to, String subject, String body, List<Attachment> attachments) {
-            System.out.println("[EmailNotifier] SMTP not configured. Printing email instead:");
-            System.out.println("From: " + from);
-            System.out.println("To: " + to);
-            System.out.println("Subject: " + subject);
-            System.out.println(body);
+            AppLog.info("[EmailNotifier] SMTP not configured. Printing email instead:");
+            AppLog.info("From: " + from);
+            AppLog.info("To: " + to);
+            AppLog.info("Subject: " + subject);
+            AppLog.info(body);
             if (!attachments.isEmpty()) {
-                System.out.println("Attachments: " + attachments.size());
+                AppLog.info("Attachments: " + attachments.size());
             }
         }
     }
 
     private static final class SmtpEmailSender implements EmailSender {
         private final Config config;
+        private final ErrorListener errorListener;
 
-        private SmtpEmailSender(Config config) {
+        private SmtpEmailSender(Config config, ErrorListener errorListener) {
             this.config = config;
+            this.errorListener = errorListener;
         }
 
         @Override
@@ -274,7 +335,11 @@ public class EmailNotifier implements Runnable {
                 message.setContent(multipart);
                 Transport.send(message);
             } catch (MessagingException e) {
-                System.err.println("[EmailNotifier] SMTP send failed: " + e.getMessage());
+                String msg = "[EmailNotifier] SMTP send failed: " + e.getMessage();
+                AppLog.error(msg);
+                if (errorListener != null) {
+                    errorListener.onError("SMTP send failed: " + e.getMessage());
+                }
             }
         }
 
@@ -305,6 +370,18 @@ public class EmailNotifier implements Runnable {
         Attachment(String name, File file) {
             this.name = name;
             this.file = file;
+        }
+    }
+
+    public static final class ConfigSnapshot {
+        public final Config config;
+        public final boolean enabled;
+        public final long generation;
+
+        public ConfigSnapshot(Config config, boolean enabled, long generation) {
+            this.config = config;
+            this.enabled = enabled;
+            this.generation = generation;
         }
     }
 }

@@ -46,11 +46,13 @@ public class Monitor {
     private static final long RENAME_WINDOW_MS = 1200;
 
     private static volatile boolean running = true;
+    private static volatile boolean shutdownHookAdded = false;
 
-    // ─────────────────────────────────────
+    // ---------- STARTUP ----------
 
     public static void start(Path rootDir) throws Exception {
 
+        running = true;
         watchService = FileSystems.getDefault().newWatchService();
         String rootPath = rootDir.toFile().getCanonicalPath();
 
@@ -72,12 +74,15 @@ public class Monitor {
 
         registerAll(rootDir);
 
-        Runtime.getRuntime().addShutdownHook(new Thread(Monitor::stop));
+        if (!shutdownHookAdded) {
+            Runtime.getRuntime().addShutdownHook(new Thread(Monitor::stop));
+            shutdownHookAdded = true;
+        }
 
-        System.out.println("[+] Real-time FIM started");
-        System.out.println("[+] Root: " + rootPath);
+        AppLog.info("[+] Real-time FIM started");
+        AppLog.info("[+] Root: " + rootPath);
 
-        // ───── MAIN LOOP ─────
+        // ---------- MAIN LOOP ----------
         while (running) {
 
             WatchKey key;
@@ -131,7 +136,7 @@ public class Monitor {
         }
     }
 
-    // ─────────────────────────────────────
+    // ---------- WATCH REGISTRATION ----------
 
     private static void register(Path dir) throws Exception {
         WatchKey key = dir.register(
@@ -156,7 +161,7 @@ public class Monitor {
         });
     }
 
-    // ─────────────────────────────────────
+    // ---------- EVENT HANDLING ----------
 
     private static void handleEvent(
             WatchEvent.Kind<?> kind,
@@ -199,7 +204,7 @@ public class Monitor {
                 if (renamedFrom != null) {
                     pendingRenames.remove(renamedFrom);
                     remapRuntimeSubtree(renamedFrom, relPath);
-                    System.out.println("[RENAMED] " + renamedFrom + " -> " + relPath);
+                    AppLog.info("[RENAMED] " + renamedFrom + " -> " + relPath);
                     emitEvent(
                             AlertEvent.Type.RENAMED_FOLDER,
                             relPath,
@@ -209,7 +214,7 @@ public class Monitor {
                     );
                 } else {
                     runtimeState.put(relPath, FIM.DIR_HASH);
-                    System.out.println("[NEW FOLDER] " + relPath);
+                    AppLog.info("[NEW FOLDER] " + relPath);
                     emitEvent(
                             AlertEvent.Type.NEW_FOLDER,
                             relPath,
@@ -348,7 +353,7 @@ public class Monitor {
 
             if (!f.exists() && runtimeState.containsKey(path)) {
                 runtimeState.remove(path);
-                System.out.println("[DELETED FILE] " + path);
+                AppLog.info("[DELETED FILE] " + path);
                 emitEvent(
                         AlertEvent.Type.DELETED_FILE,
                         path,
@@ -383,7 +388,7 @@ public class Monitor {
                     p.equals(path) || p.startsWith(prefix)
             );
 
-            System.out.println("[DELETED FOLDER] " + path);
+            AppLog.info("[DELETED FOLDER] " + path);
             emitEvent(
                     AlertEvent.Type.DELETED_FOLDER,
                     path,
@@ -395,7 +400,7 @@ public class Monitor {
         });
     }
 
-    // ─────────────────────────────────────
+    // ---------- RUNTIME REMAP ----------
 
     private static void remapRuntimeSubtree(String oldPath, String newPath) {
 
@@ -508,7 +513,7 @@ public class Monitor {
             String oldParent = meta == null ? "" : meta.parent;
             String newParent = parentOf(relPath);
             if (Objects.equals(oldParent, newParent)) {
-                System.out.println("[RENAMED FILE] " + renamedFrom + " â†’ " + relPath);
+                AppLog.info("[RENAMED FILE] " + renamedFrom + " -> " + relPath);
                 emitEvent(
                         AlertEvent.Type.RENAMED_FILE,
                         relPath,
@@ -517,7 +522,7 @@ public class Monitor {
                         false
                 );
             } else {
-                System.out.println("[MOVED FILE] " + renamedFrom + " â†’ " + relPath);
+                AppLog.info("[MOVED FILE] " + renamedFrom + " -> " + relPath);
                 emitEvent(
                         AlertEvent.Type.MOVED_FILE,
                         relPath,
@@ -534,7 +539,7 @@ public class Monitor {
 
         if (oldRuntime == null) {
             runtimeState.put(relPath, newHash);
-            System.out.println("[NEW FILE] " + relPath);
+            AppLog.info("[NEW FILE] " + relPath);
             emitEvent(AlertEvent.Type.NEW_FILE, relPath, null, root, false);
             return;
         }
@@ -542,10 +547,10 @@ public class Monitor {
         if (!newHash.equals(oldRuntime)) {
             runtimeState.put(relPath, newHash);
             if (baseHash != null && baseHash.equals(newHash)) {
-                System.out.println("[RESTORED] " + relPath);
+                AppLog.info("[RESTORED] " + relPath);
                 emitEvent(AlertEvent.Type.RESTORED, relPath, null, root, false);
             } else {
-                System.out.println("[MODIFIED] " + relPath);
+                AppLog.info("[MODIFIED] " + relPath);
                 emitEvent(AlertEvent.Type.MODIFIED, relPath, null, root, false);
             }
         }
@@ -593,35 +598,35 @@ public class Monitor {
 
             if (d == null) {
                 if (FIM.DIR_HASH.equals(b)) {
-                    System.out.println("[DELETED FOLDER] " + path);
+                    AppLog.info("[DELETED FOLDER] " + path);
                 } else {
-                    System.out.println("[DELETED FILE] " + path);
+                    AppLog.info("[DELETED FILE] " + path);
                 }
                 changesFound = true;
                 continue;
             }
 
             if (FIM.DIR_HASH.equals(b) && !FIM.DIR_HASH.equals(d)) {
-                System.out.println("[TYPE CHANGED] " + path);
+                AppLog.info("[TYPE CHANGED] " + path);
                 changesFound = true;
                 continue;
             }
 
             if (!FIM.DIR_HASH.equals(b) && FIM.DIR_HASH.equals(d)) {
-                System.out.println("[TYPE CHANGED] " + path);
+                AppLog.info("[TYPE CHANGED] " + path);
                 changesFound = true;
                 continue;
             }
 
             if (!FIM.DIR_HASH.equals(b)) {
                 if (FIM.UNREADABLE_HASH.equals(d)) {
-                    System.out.println("[SKIPPED] " + path + " (unreadable)");
+                    AppLog.warn("[SKIPPED] " + path + " (unreadable)");
                     changesFound = true;
                     continue;
                 }
 
                 if (!b.equals(d)) {
-                    System.out.println("[MODIFIED] " + path);
+                    AppLog.info("[MODIFIED] " + path);
                     changesFound = true;
                 }
             }
@@ -631,16 +636,16 @@ public class Monitor {
             if (!baseline.containsKey(path)) {
                 String d = disk.get(path);
                 if (FIM.DIR_HASH.equals(d)) {
-                    System.out.println("[NEW FOLDER] " + path);
+                    AppLog.info("[NEW FOLDER] " + path);
                 } else {
-                    System.out.println("[NEW FILE] " + path);
+                    AppLog.info("[NEW FILE] " + path);
                 }
                 changesFound = true;
             }
         }
 
         if (!changesFound) {
-            System.out.println("[OK] No pre-existing drift detected.");
+            AppLog.info("[OK] No pre-existing drift detected.");
         }
     }
 }
