@@ -1,224 +1,88 @@
-# Real-Time File Integrity Monitor (Java)
+# REAL-TIME FILE INTEGRITY MONITOR
 
-A **real-time, event-driven File Integrity Monitoring (FIM)** system built in Java that tracks filesystem changes using **OS-level events**, **cryptographic hashing**, and a **runtime state map**. Includes both a **CLI** and a **Swing GUI**.
+A robust, real-time File Integrity Monitoring system engineered in Java. This tool detects unauthorized changes to the filesystem including file creation, modification, deletion, and renaming events using cryptographic verification and OS-level hooks.
 
-This project evolved from a baseline-only checker into a **rename-aware, real-time FIM**.
+## � Table of Contents
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Installation & Execution](#installation--execution)
+- [Configuration](#configuration)
+- [Project Structure](#project-structure)
 
----
+## Overview
+The FIM tool is designed to provide security visibility into filesystem activities. Unlike traditional polling-based monitors, this system leverages Java NIO's `WatchService` for event-driven detection, ensuring minimal CPU overhead while maintaining near-instantaneous alert generation. It validates file integrity using **SHA-256** hashing to distinguish between superficial timestamp changes and actual content modification.
 
-## Key Features
+## Architecture
+The application operates on a multithreaded architecture:
+1.  **Monitor Engine (`Monitor.java`)**: The core event loop that registers directories with the OS kernel. It handles `ENTRY_CREATE`, `ENTRY_MODIFY`, and `ENTRY_DELETE` events.
+2.  **State Management**:
+    *   **Baseline**: A persistent snapshot of the "known good" state.
+    *   **Runtime State**: An in-memory map tracking the live status of the filesystem to detect anomalies like "Renames" (which the OS often reports as separate Delete/Create events).
+3.  **Alert Bus**: A decoupled publisher-subscriber system that routes events to the GUI and Email Notification services asynchronously.
 
-- Real-time monitoring using Java NIO `WatchService`
-- Recursive directory monitoring (all subfolders included)
-- SHA-256 hashing for integrity verification
-- Rename and move detection (files and folders)
-- Accurate delete detection (no false deletes on rename/save)
-- Debounce handling for ENTRY_MODIFY event spam
-- Runtime state as ground truth (baseline != live filesystem)
-- Cross-platform (Windows / Linux / macOS)
-- Swing GUI for quick monitoring and email controls
+## Features
+*   **Cryptographic Verification**: Uses `SHA-256` checksums to verify file content integrity.
+*   **Smart Rename Detection**: Correlates Delete and Create events to identify file moves and renames.
+*   **Deboucing Logic**: Intelligent handling of rapid OS events (e.g., during file saves) to prevent false positives.
+*   **Real-Time Dashboard**: A specialized Swing-based GUI with a live event stream and visual severity indicators.
+*   **Notification System**: Integration with SMTP to send consolidated alert batches to administrators.
 
----
+## Prerequisites
+*   **Java Development Kit (JDK)**: Version 17 or higher.
+*   **Operating System**: Windows, macOS, or Linux.
 
-## How It Works (FIM.java + Monitor.java + EmailNotifier.java + Gui.java)
+## Installation & Execution
 
-### FIM.java (CLI controller)
-
-1. Takes **folder path** input and validates it.
-2. Provides menu options:
-   - Create Baseline
-   - Check Integrity
-   - Start Real-Time Monitoring
-   - Update Baseline
-3. Baseline creation:
-   - Recursively scans files/folders.
-   - Saves `{relativePath | size | lastModified | hash}` to `~/.fim/baseline_<hash>.db` (hash is derived from the root path).
-4. Integrity check:
-   - Loads baseline, rescans folder, compares:
-     - `[NEW]`, `[MODIFIED]`, `[DELETED]`, `[TYPE CHANGED]`.
-5. Real-time monitoring:
-   - Ensures baseline exists, then calls `Monitor.start(...)`.
-   - Starts `EmailNotifier` (SMTP if configured, console fallback otherwise).
-
-### Monitor.java (real-time engine)
-
-1. Loads baseline into:
-   - `baselineDisk` (reference)
-   - `runtimeState` (ground truth)
-2. Registers **all directories** with `WatchService`.
-3. Main loop:
-   - Polls events.
-   - Routes each event to `handleEvent(...)`.
-4. Handles logic:
-   - **Debounce** noisy modify events.
-   - **Delete delay** to confirm real deletes vs renames.
-   - **Rename/move detection** using hash + time window.
-   - **Folder rename detection** using parent + time window.
-5. `cleanupDeletes(...)` finalizes deletes and clears stale renames.
-
----
-
-## System Diagram (Data + Control Flow)
-
-```text
-User Input (Folder Path)
-        |
-        v
-FIM.java (menu + control)
-        |
-        +--> Create Baseline
-        |       |
-        |       v
-        |   scanFolder -> hash/size/time -> ~/.fim/baseline.db
-        |
-        +--> Check Integrity
-        |       |
-        |       v
-        |   loadBaseline + scanFolder
-        |       |
-        |       v
-        |   compare -> [NEW / MODIFIED / DELETED / TYPE CHANGED]
-        |
-        +--> Start Monitoring
-                |
-                v
-        Monitor.start(rootDir)
-                |
-                +--> loadBaselineForMonitor
-                |       |
-                |       v
-                |   baselineDisk + runtimeState
-                |
-                +--> registerAll(rootDir)
-                |
-                +--> Watch Loop
-                        |
-                        v
-                 handleEvent(...)
-                        |
-        +---------------+----------------+
-        |               |                |
-        v               v                v
-     NEW FILE        MODIFIED          DELETED
-     RESTORED        RENAMED           MOVED
-```
-
----
-
-## Example Output
-
-```text
-[NEW FOLDER] docs
-[NEW FILE] docs/readme.txt
-[MODIFIED] docs/readme.txt
-[RENAMED] docs -> documents
-[DELETED FILE] documents/readme.txt
-```
----
-
-## GUI (Gui.java + GuiController.java)
-
-- Folder picker + buttons for baseline, integrity check, and monitoring
-- Status bar shows monitor + email state
-- Email controls let you toggle sending and adjust batch/attachment limits
-- Email sending is active only while monitoring is running
-
----
-
-## Technologies Used
-- Java
-- Java NIO (WatchService, Path, Files)
-- SHA-256 (MessageDigest)
-- File I/O
-- Concurrent collections (ConcurrentHashMap)
-- OS-level filesystem events
-- Jakarta Mail + Activation (SMTP email notifications + attachments)
-
----
-
-## How to Run
+### 1. Compile the Project
+Navigate to the project root and compile the source code, including dependencies.
 ```bash
 javac -cp "lib/*" *.java
+```
+
+### 2. Run the Graphical Interface (Recommended)
+Launch the dashboard for interactive monitoring.
+```bash
+# Windows
+java -cp ".;lib/*" Gui
+
+# Linux / macOS
+java -cp ".:lib/*" Gui
+```
+
+### 3. Run Command Line Interface (Headless)
+For server environments without a display.
+```bash
 java -cp ".;lib/*" FIM
 ```
 
-GUI:
-```bash
-javac -cp "lib/*" *.java
-java -cp ".;lib/*" Gui
+## Configuration
+The application can be configured via Environment Variables for deployment flexibility.
+
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `FIM_SMTP_HOST` | SMTP Server Address (e.g., `smtp.gmail.com`) | *Required for Email* |
+| `FIM_SMTP_PORT` | SMTP Port | `25` |
+| `FIM_MAIL_TO` | Recipient email addresses (comma-separated) | *Required for Email* |
+| `FIM_BATCH_SEC` | Time window (seconds) to batch alerts before sending | `45` |
+| `FIM_ATTACH_MAX_BYTES` | Max size of changed files to attach in emails | `524288` (512KB) |
+
+## Project Structure
+```text
+src/
+├── Monitor.java       # Core event loop and logic
+├── FIM.java           # CLI Entry point and Baseline management
+├── Gui.java           # Main GUI Entry point
+├── GuiController.java # Logic separating View and Model
+├── AlertBus.java      # Event pub/sub system
+├── AlertEvent.java    # Data carrier for events
+├── EmailNotifier.java # SMTP handling logic
+└── Theme.java         # UI Look and Feel definitions
 ```
 
-Note: On macOS/Linux, replace the classpath separator `;` with `:`.
-
----
-
-## Workflow (Step-by-Step)
-
-### CLI
-1. Compile and run `FIM`.
-2. Enter the folder path to monitor.
-3. Choose an option:
-   - Create Baseline (one-time reference snapshot)
-   - Check Integrity (compare current disk vs baseline)
-   - Start Monitoring (real-time watch + alerts)
-   - Update Baseline (overwrite existing baseline)
-4. If monitoring starts and SMTP is configured, email alerts are sent in batches.
-
-### GUI
-1. Compile and run `Gui`.
-2. Choose a folder (Browse).
-3. Create Baseline (if not already created).
-4. Start Monitoring (real-time watch + alerts).
-5. Optionally toggle Email Enabled and adjust batch/attachment settings.
-
-## Usage
-
-1. Enter the folder path to monitor
-2. Choose Create Baseline (one-time reference snapshot)
-3. Restart the program
-4. Choose Start Real-Time Monitoring
-5. Create, modify, or delete files in the monitored folder to see alerts
-6. Observe real-time integrity events in the console (and email if configured)
-
----
-
-## Email Configuration (Optional)
-
-Email sending is enabled when SMTP environment variables are set. If `FIM_SMTP_HOST` is empty, emails are printed to the console instead.
-
-Required for SMTP:
-- `FIM_SMTP_HOST`
-- `FIM_MAIL_TO` (comma-separated)
-
-Common optional settings:
-- `FIM_SMTP_PORT` (default: `25`)
-- `FIM_SMTP_STARTTLS` (default: `false`)
-- `FIM_SMTP_USER`
-- `FIM_SMTP_PASS`
-- `FIM_MAIL_FROM` (default: `fim@localhost`)
-- `FIM_MAIL_SUBJECT` (default: `[FIM]`)
-- `FIM_BATCH_SEC` (default: `45`)
-- `FIM_ATTACH_MAX_BYTES` (default: `524288`)
-
----
-
-## Limitations
-
-- Runs as a foreground process
-- Email alerts require SMTP configuration (see above)
-- No persistent event logging yet
-
----
-
-## Future Enhancements
-
-- Attack vs legitimate change classification
-- Persistent JSON event logs
-- GUI-based monitoring dashboard
-- Background service / daemon mode
-
----
+## License
+This project is open-source and available for educational and security auditing purposes.
 
 ## Author
-
-Nand Gopal Sharma
+**NAND GOPAL SHARMA**
