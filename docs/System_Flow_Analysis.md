@@ -1,8 +1,8 @@
 # System Flow Analysis & Application Architecture
 
-This document provides a comprehensive breakdown of the File Integrity Monitor (FIM) system, detaling the role of every file, the lifecycle of an event, and the execution flows for both CLI and GUI modes.
+This document provides a comprehensive breakdown of the File Integrity Monitor (FIM) system, detailing the role of every file, the lifecycle of an event, and the execution flows for both CLI and GUI modes.
 
-## 1. File Role Breakdown (Sari Files Ka Kya Kaam Hai)
+## 1. File Role Breakdown
 
 | File Name | Component Type | Responsibility / Description |
 | :--- | :--- | :--- |
@@ -24,9 +24,35 @@ This document provides a comprehensive breakdown of the File Integrity Monitor (
 
 ---
 
-## 2. Event Propagation Flow (Kis Event Me Kon Si File Use Ho Rhi Hai)
+## 2. Event Propagation Flow
 
 This flow describes what happens technically when a user modifies a file while the system is running.
+
+```mermaid
+graph TD
+    User((User)) -->|Modifies 'secret.txt'| OS[OS Kernel]
+    OS -->|Notify Change| Monitor[Monitor.java]
+    
+    subgraph Engine
+        Monitor -->|Debounce Event| Processing[Hash Calculation]
+        Processing -->|Verify vs Baseline| Verification{Changed?}
+        Verification -- Yes --> AlertEvent[Create AlertEvent]
+        Verification -- No --> Ignore[Ignore]
+    end
+    
+    AlertEvent -->|Publish| Bus[AlertBus.java]
+    
+    subgraph UI_Flow
+        Bus -->|Update Listener| Controller[GuiController]
+        Controller -->|Add Row| View[Gui Table]
+    end
+    
+    subgraph Email_Flow
+        Bus -->|Queue Event| Queue[Event Queue]
+        Queue -->|Batch Window| Notifier[EmailNotifier]
+        Notifier -->|Send Batch| SMTP[SMTP Server]
+    end
+```
 
 ### Scenario: User modifies `secret.txt`
 1.  **OS Kernel**: Detects the file change and notifies the JVM.
