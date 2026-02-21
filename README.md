@@ -39,7 +39,7 @@ The application operates on a multithreaded architecture:
 ## Features
 *   **Cryptographic Verification**: Uses `SHA-256` checksums to verify file content integrity.
 *   **Smart Rename Detection**: Correlates Delete and Create events to identify file moves and renames.
-*   **Deboucing Logic**: Intelligent handling of rapid OS events (e.g., during file saves) to prevent false positives.
+*   **Debouncing Logic**: Intelligent handling of rapid OS events (e.g., during file saves) to prevent false positives.
 *   **Real-Time Dashboard**: A specialized Swing-based GUI with a live event stream and visual severity indicators.
 *   **Notification System**: Integration with SMTP to send consolidated alert batches to administrators.
 
@@ -101,6 +101,9 @@ The application can be configured via Environment Variables for deployment flexi
 |-- Theme.java
 |-- baseline.txt
 |-- README.md
+|-- docs/
+|   |-- Project_Report.md
+|   `-- System_Flow_Analysis.md
 `-- lib/
     |-- jakarta.activation-2.0.1.jar
     `-- jakarta.mail-2.0.2.jar
@@ -111,5 +114,3 @@ This project is open-source and available for educational and security auditing 
 
 ## Author
 **NAND GOPAL SHARMA**
-
-
