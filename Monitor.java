@@ -42,7 +42,7 @@ public class Monitor {
             new ConcurrentHashMap<>();
 
     private static final long MODIFY_STABLE_MS = 600;
-    private static final long DELETE_VERIFY_MS = 300;
+    private static final long DELETE_VERIFY_MS = 800;
     private static final long RENAME_WINDOW_MS = 1200;
 
     private static volatile boolean running = true;
@@ -649,3 +649,5 @@ public class Monitor {
         }
     }
 }
+
+

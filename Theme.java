@@ -16,6 +16,7 @@ public class Theme {
     public static final Color COLOR_NEW = new Color(40, 80, 40); // Dark Green
     public static final Color COLOR_MODIFIED = new Color(100, 80, 40); // Dark Orange
     public static final Color COLOR_RESTORED = new Color(40, 40, 100); // Dark Blue
+    public static final Color COLOR_RENAMED = new Color(40, 90, 90); // Dark Teal
 
     // Fonts
     public static final java.awt.Font FONT_MAIN = new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 14);
