@@ -80,7 +80,8 @@ public class FIM {
     static File getBaselineFile() {
 
         File dir = new File(System.getProperty("user.home"), ".fim");
-        if (!dir.exists()) dir.mkdirs();
+        if (!dir.exists())
+            dir.mkdirs();
 
         String name = "baseline.db";
         if (rootPath != null && !rootPath.isBlank()) {
@@ -183,13 +184,15 @@ public class FIM {
     static void scanFolder(File folder, Map<String, FileMeta> map) throws Exception {
 
         File[] files = folder.listFiles();
-        if (files == null) return;
+        if (files == null)
+            return;
 
         Path root = Paths.get(rootPath);
 
         for (File file : files) {
 
-            if (Files.isSymbolicLink(file.toPath())) continue;
+            if (Files.isSymbolicLink(file.toPath()))
+                continue;
 
             Path filePath;
             try {
@@ -198,7 +201,8 @@ public class FIM {
                 continue;
             }
 
-            if (!filePath.startsWith(root)) continue;
+            if (!filePath.startsWith(root))
+                continue;
 
             String relativePath = root.relativize(filePath)
                     .toString()
@@ -249,7 +253,8 @@ public class FIM {
 
         byte[] hash = digest.digest();
         StringBuilder sb = new StringBuilder();
-        for (byte b : hash) sb.append(String.format("%02x", b));
+        for (byte b : hash)
+            sb.append(String.format("%02x", b));
         return sb.toString();
     }
 
@@ -258,7 +263,8 @@ public class FIM {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] bytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder();
-            for (byte b : bytes) sb.append(String.format("%02x", b));
+            for (byte b : bytes)
+                sb.append(String.format("%02x", b));
             return sb.toString();
         } catch (Exception e) {
             return "unknown";
@@ -281,16 +287,17 @@ public class FIM {
             while ((line = br.readLine()) != null) {
 
                 String[] p = line.split("\\|");
-                if (p.length != 4) continue;
+                if (p.length != 4)
+                    continue;
 
                 try {
                     map.put(p[0],
                             new FileMeta(
                                     Long.parseLong(p[1]),
                                     Long.parseLong(p[2]),
-                                    p[3]
-                            ));
-                } catch (Exception ignored) {}
+                                    p[3]));
+                } catch (Exception ignored) {
+                }
             }
         }
         return map;
@@ -323,4 +330,3 @@ public class FIM {
         }
     }
 }
-
