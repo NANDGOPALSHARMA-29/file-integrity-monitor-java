@@ -150,7 +150,7 @@ public final class GuiController {
     }
 
     private File validateFolder(String pathText) {
-        File folder = new File(pathText.trim());
+        File folder = FIM.resolveFolderInput(pathText);
         if (!folder.exists() || !folder.isDirectory()) {
             view.showError("Invalid folder path: " + folder.getAbsolutePath()
                     + "\nPlease select an existing folder.");

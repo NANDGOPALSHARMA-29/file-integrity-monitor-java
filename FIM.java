@@ -19,7 +19,7 @@ public class FIM {
         System.out.print("Enter folder path: ");
         String folderPath = sc.nextLine();
 
-        File folder = new File(folderPath);
+        File folder = resolveFolderInput(folderPath);
         if (!folder.exists() || !folder.isDirectory()) {
             AppLog.error("Invalid folder path: " + folderPath);
             return;
@@ -88,6 +88,26 @@ public class FIM {
             name = "baseline_" + hashString(rootPath) + ".db";
         }
         return new File(dir, name);
+    }
+
+    static File resolveFolderInput(String rawPath) {
+        if (rawPath == null) {
+            return new File("");
+        }
+
+        String path = rawPath.trim();
+        if (path.length() >= 2
+                && path.startsWith("\"")
+                && path.endsWith("\"")) {
+            path = path.substring(1, path.length() - 1).trim();
+        }
+
+        // On Windows, "D:" is drive-relative while "D:\" is the drive root.
+        if (File.separatorChar == '\\' && path.matches("^[a-zA-Z]:$")) {
+            path = path + "\\";
+        }
+
+        return new File(path);
     }
 
     // ---------- BASELINE CREATION ----------
