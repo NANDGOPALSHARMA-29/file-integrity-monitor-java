@@ -561,8 +561,13 @@ public class Monitor {
 
         if (oldRuntime == null) {
             runtimeState.put(relPath, newHash);
-            AppLog.info("[NEW FILE] " + relPath);
-            emitEvent(AlertEvent.Type.NEW_FILE, relPath, null, root, false);
+            if (baseHash != null && baseHash.equals(newHash)) {
+                AppLog.info("[RESTORED] " + relPath);
+                emitEvent(AlertEvent.Type.RESTORED, relPath, null, root, false);
+            } else {
+                AppLog.info("[NEW FILE] " + relPath);
+                emitEvent(AlertEvent.Type.NEW_FILE, relPath, null, root, false);
+            }
             return;
         }
 
