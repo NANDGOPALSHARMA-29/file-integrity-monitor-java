@@ -199,19 +199,32 @@ public class Monitor {
                         : Paths.get(relPath).getParent().toString();
 
                 long now = System.currentTimeMillis();
-                String renamedFrom = findFolderRenameCandidate(parent, now);
+                String renamedFrom = findFolderRenameCandidate(relPath, parent, now);
 
                 if (renamedFrom != null) {
                     pendingRenames.remove(renamedFrom);
                     remapRuntimeSubtree(renamedFrom, relPath);
-                    AppLog.info("[RENAMED] " + renamedFrom + " -> " + relPath);
-                    emitEvent(
-                            AlertEvent.Type.RENAMED_FOLDER,
-                            relPath,
-                            renamedFrom,
-                            rootPath,
-                            true
-                    );
+                    
+                    String oldParent = parentOf(renamedFrom);
+                    if (Objects.equals(oldParent, parent)) {
+                        AppLog.info("[RENAMED FOLDER] " + renamedFrom + " -> " + relPath);
+                        emitEvent(
+                                AlertEvent.Type.RENAMED_FOLDER,
+                                relPath,
+                                renamedFrom,
+                                rootPath,
+                                true
+                        );
+                    } else {
+                        AppLog.info("[MOVED FOLDER] " + renamedFrom + " -> " + relPath);
+                        emitEvent(
+                                AlertEvent.Type.MOVED_FOLDER,
+                                relPath,
+                                renamedFrom,
+                                rootPath,
+                                true
+                        );
+                    }
                 } else {
                     runtimeState.put(relPath, FIM.DIR_HASH);
                     AppLog.info("[NEW FOLDER] " + relPath);
@@ -283,22 +296,31 @@ public class Monitor {
         return p == null ? "" : p.toString();
     }
 
-    private static String findFolderRenameCandidate(String parent, long now) {
+    private static String findFolderRenameCandidate(String newPath, String parent, long now) {
+        String newName = Paths.get(newPath).getFileName() != null ? Paths.get(newPath).getFileName().toString() : "";
+
+        List<String> sameParent = new ArrayList<>();
+        List<String> sameName = new ArrayList<>();
+        List<String> valid = new ArrayList<>();
+
         for (Map.Entry<String, Long> e : pendingRenames.entrySet()) {
-            String oldPath = e.getKey();
             if (now - e.getValue() > RENAME_WINDOW_MS) continue;
+            String oldPath = e.getKey();
+            valid.add(oldPath);
             if (Objects.equals(parentOf(oldPath), parent)) {
-                return oldPath;
+                sameParent.add(oldPath);
+            }
+            String oldName = Paths.get(oldPath).getFileName() != null ? Paths.get(oldPath).getFileName().toString() : "";
+            if (Objects.equals(oldName, newName)) {
+                sameName.add(oldPath);
             }
         }
 
-        String candidate = null;
-        for (Map.Entry<String, Long> e : pendingRenames.entrySet()) {
-            if (now - e.getValue() > RENAME_WINDOW_MS) continue;
-            if (candidate != null) return null;
-            candidate = e.getKey();
-        }
-        return candidate;
+        if (sameParent.size() == 1) return sameParent.get(0);
+        if (sameName.size() == 1) return sameName.get(0);
+        if (valid.size() == 1) return valid.get(0);
+
+        return null;
     }
 
     private static String findFileRenameCandidate(

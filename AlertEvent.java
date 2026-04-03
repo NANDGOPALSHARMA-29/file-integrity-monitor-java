@@ -11,7 +11,8 @@ public final class AlertEvent {
         DELETED_FOLDER,
         RENAMED_FILE,
         MOVED_FILE,
-        RENAMED_FOLDER
+        RENAMED_FOLDER,
+        MOVED_FOLDER
     }
 
     public final Type type;

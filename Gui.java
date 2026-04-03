@@ -74,7 +74,7 @@ public class Gui {
                                 c.setBackground(Theme.COLOR_RESTORED);
                                 c.setForeground(Color.WHITE);
                             }
-                            case RENAMED_FILE, MOVED_FILE, RENAMED_FOLDER -> {
+                            case RENAMED_FILE, MOVED_FILE, RENAMED_FOLDER, MOVED_FOLDER -> {
                                 c.setBackground(Theme.COLOR_RENAMED);
                                 c.setForeground(Color.WHITE);
                             }
