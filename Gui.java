@@ -16,7 +16,7 @@ public class Gui {
 
     private static void buildUi() {
         JFrame frame = new JFrame("FIM Tool");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 
         JTextField pathField = new JTextField(DEFAULT_PATH);
         pathField.setPreferredSize(new Dimension(300, 35));
@@ -231,7 +231,10 @@ public class Gui {
         frame.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                new Thread(controller::shutdown, "fim-shutdown").start();
+                new Thread(() -> {
+                    controller.shutdown();
+                    System.exit(0);
+                }, "fim-shutdown").start();
             }
         });
 

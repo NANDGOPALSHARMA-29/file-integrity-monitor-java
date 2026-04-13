@@ -293,7 +293,7 @@ public class Monitor {
 
     private static String parentOf(String relPath) {
         Path p = Paths.get(relPath).getParent();
-        return p == null ? "" : p.toString();
+        return p == null ? "" : p.toString().replace('\\', '/');
     }
 
     private static String findFolderRenameCandidate(String newPath, String parent, long now) {
@@ -587,28 +587,44 @@ public class Monitor {
         Map<String, String> map = new HashMap<>();
         Path root = rootDir.toAbsolutePath().normalize();
 
-        Files.walk(root)
-                .filter(p -> !Files.isSymbolicLink(p))
-                .forEach(p -> {
-                    if (p.equals(root)) return;
-
-                    String relPath = root.relativize(p)
+        Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                if (Files.isSymbolicLink(dir)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                if (!dir.equals(root)) {
+                    String relPath = root.relativize(dir)
                             .toString()
                             .replace(File.separatorChar, '/');
+                    map.put(relPath, FIM.DIR_HASH);
+                }
+                return FileVisitResult.CONTINUE;
+            }
 
-                    if (Files.isDirectory(p)) {
-                        map.put(relPath, FIM.DIR_HASH);
-                        return;
-                    }
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                if (Files.isSymbolicLink(file)) {
+                    return FileVisitResult.CONTINUE;
+                }
+                String relPath = root.relativize(file)
+                        .toString()
+                        .replace(File.separatorChar, '/');
+                String hash;
+                try {
+                    hash = FIM.getFileHash(file.toFile());
+                } catch (Exception e) {
+                    hash = FIM.UNREADABLE_HASH;
+                }
+                map.put(relPath, hash);
+                return FileVisitResult.CONTINUE;
+            }
 
-                    String hash;
-                    try {
-                        hash = FIM.getFileHash(p.toFile());
-                    } catch (Exception e) {
-                        hash = FIM.UNREADABLE_HASH;
-                    }
-                    map.put(relPath, hash);
-                });
+            @Override
+            public FileVisitResult visitFileFailed(Path file, IOException exc) {
+                return FileVisitResult.CONTINUE;
+            }
+        });
 
         return map;
     }
