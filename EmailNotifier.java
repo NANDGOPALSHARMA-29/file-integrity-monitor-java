@@ -23,6 +23,8 @@ import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
 
+// This class listens for alert events and sends batched email notifications.
+// It collects events over a time window and sends them via SMTP or console.
 public class EmailNotifier implements Runnable {
 
     public interface ConfigProvider {
@@ -69,8 +71,11 @@ public class EmailNotifier implements Runnable {
         thread.interrupt();
     }
 
+
+    // Continuously listens for alert events and groups them into batches
+    // based on a time window before sending email notifications
     @Override
-    public void run() {
+    public void run() {      
         while (running) {
             try {
                 AlertEvent first = AlertBus.take();
@@ -99,6 +104,9 @@ public class EmailNotifier implements Runnable {
         }
     }
 
+
+    // Sends a batch of alert events as a single email
+    // Includes subject, body formatting, and optional attachments
     private void sendBatch(List<AlertEvent> batch, long batchGeneration) {
         if (batch.isEmpty()) return;
 
@@ -145,6 +153,7 @@ public class EmailNotifier implements Runnable {
         );
     }
 
+    // Determines whether a file should be attached based on event type
     private boolean shouldAttach(AlertEvent e) {
         if (e.isDirectory) return false;
         return e.type == AlertEvent.Type.NEW_FILE
@@ -152,6 +161,7 @@ public class EmailNotifier implements Runnable {
                 || e.type == AlertEvent.Type.RESTORED;
     }
 
+    // Holds email and batching configuration loaded from environment variables
     public static final class Config {
         public final String smtpHost;
         public final int smtpPort;
@@ -188,6 +198,7 @@ public class EmailNotifier implements Runnable {
             this.attachMaxBytes = attachMaxBytes;
         }
 
+        // Reads configuration values from environment variables with defaults
         public static Config fromEnv() {
             String host = env("FIM_SMTP_HOST", "");
             int port = envInt("FIM_SMTP_PORT", 25);
